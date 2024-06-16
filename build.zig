@@ -1,13 +1,20 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    const yosys_data_dir =
+        b.option([]const u8, "yosys_data_dir", "yosys data dir (per yosys-config --datdir)") orelse
+        guessYosysDataDir(b);
+
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("zxxrtl", .{
+    const mod = b.addModule("zxxrtl", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
+    });
+    mod.addIncludePath(.{
+        .cwd_relative = b.fmt("{s}/include/backends/cxxrtl/runtime", .{yosys_data_dir}),
     });
 
     const lib = b.addStaticLibrary(.{
