@@ -18,9 +18,9 @@ with [Amaranth] and Zig.
 > [!NOTE]
 > This guide assumes you're driving the build from outside, and use Zig's build
 > system just to build the Zig parts and link the final object. This gives you a
-> lot of flexibility, but if you don't need it, you can simplify a lot by
-> bringing the CXXRTL object file building into your `build.zig` too. Refer to
-> [zxxrtl's `build.zig`] for guidance.
+> lot of flexibility, but if you don't need it, you can simplify by bringing the
+> CXXRTL object file building into your `build.zig` too. Refer to [zxxrtl's
+> `build.zig`] for guidance.
 
 [zxxrtl's `build.zig`]: https://github.com/kivikakk/zxxrtl/blob/main/build.zig
 
@@ -30,24 +30,48 @@ Add zxxrtl to your `build.zig.zon`:
 zig fetch --save https://github.com/kivikakk/zxxrtl/archive/<commit>.tar.gz
 ```
 
-Add the import to your `build.zig`. You'll need to find Yosys's data dir to get the header includes;
-you'll also need to know the CXXRTL compiled object files to link against. A serving suggestion
-follows.
+Now let's add the import to your `build.zig`. We'll take the CXXRTL object file
+list as an option in the `build()` function:
 
-First, add options to specify the Yosys data dir and object files in your `build()` function:
+```zig
+const cxxrtl_o_paths = b.option([][]const u8, "cxxrtl_o_path", "path to .o file to link against")
+    orelse &[_][]const u8{"../build/cxxrtl/ili9341spi.o"};
+```
+
+We supply a default value for the object file paths --- it should match your
+development environment. This is to ensure ZLS still works.
+
+Then add the dependency, and import the module into your executable:
+
+```zig
+const zxxrtl_mod = b.dependency("zxxrtl", .{
+    .target = target,
+    .optimize = optimize,
+}).module("zxxrtl");
+exe.root_module.addImport("zxxrtl", zxxrtl_mod);
+```
+
+The last step is to link against the CXXRTL object files:
+
+```zig
+for (cxxrtl_o_paths) |cxxrtl_o_path| {
+    exe.addObjectFile(b.path(cxxrtl_o_path));
+}
+```
+
+### Specify Yosys' data dir
+
+If you want to be able to specify the Yosys data dir from the `zig build` line,
+you can specify it when adding the zxxrtl dependency. Here we add an option,
+with a default fallback to actually calling `yosys-config --datdir` for ZLS or
+the lazy:
 
 ```zig
 const yosys_data_dir = b.option([]const u8, "yosys_data_dir", "yosys data dir (per yosys-config --datdir)")
     orelse @import("zxxrtl").guessYosysDataDir(b);
-const cxxrtl_o_paths = b.option([]const u8, "cxxrtl_o_paths", "comma-separated paths to .o files to link against, including CXXRTL simulation")
-    orelse "../build/cxxrtl/ili9341spi.o";
 ```
 
-We'll attempt to call `yosys-config` if a data dir isn't specified explicitly.
-We also supply a default value for the object file paths --- this should match
-your development environment. These defaults ensure ZLS still works.
-
-Then add the dependency, and add the module as an import to your executable:
+Now adapt the `b.dependency()` call:
 
 ```zig
 const zxxrtl_mod = b.dependency("zxxrtl", .{
@@ -55,19 +79,6 @@ const zxxrtl_mod = b.dependency("zxxrtl", .{
     .optimize = optimize,
     .yosys_data_dir = yosys_data_dir,
 }).module("zxxrtl");
-exe.root_module.addImport("zxxrtl", zxxrtl_mod);
-```
-
-If you always want to rely on the Yosys data dir guessing, you can just omit all
-the `yosys_dat_dir`-related parts and zxxrtl will take care of it.
-
-The last step is to link against the CXXRTL object files:
-
-```zig
-var it = std.mem.split(u8, cxxrtl_o_paths, ",");
-while (it.next()) |cxxrtl_o_path| {
-    exe.addObjectFile(b.path(cxxrtl_o_path));
-}
 ```
 
 ## Usage
