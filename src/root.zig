@@ -21,6 +21,12 @@ pub fn get(self: Cxxrtl, comptime T: type, name: [:0]const u8) Object(T) {
     return self.find(T, name) orelse std.debug.panic("object not found: {s}", .{name});
 }
 
+pub fn getInit(self: Cxxrtl, comptime T: type, name: [:0]const u8, value: T) Object(T) {
+    const o = self.find(T, name) orelse std.debug.panic("object not found: {s}", .{name});
+    o.next(value);
+    return o;
+}
+
 pub fn find(self: Cxxrtl, comptime T: type, name: [:0]const u8) ?Object(T) {
     if (c.cxxrtl_get(self.handle, name)) |handle| {
         return Object(T){ .object = handle };
